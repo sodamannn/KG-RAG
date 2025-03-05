@@ -6,22 +6,46 @@ import numpy as np
 import argparse
 from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
+import pandas as pd  # Added for Excel support
 
-def load_entities_with_metadata(file_path):
+def load_entities_with_metadata(file_path, limit=None):
     """
     Load entries and preserve metadata (IDs and text).
+    Supports both Excel (.xlsx) files and tab-delimited text files.
     Returns a list of dictionaries containing 'id' and 'text'.
+    
+    If limit is specified, only returns up to that many entries.
     """
     entries = []
-    try:
-        with open(file_path, 'r', encoding='utf-8') as file:
-            for line in file:
-                parts = line.strip().split('\t')
-                if len(parts) > 1:
-                    entries.append({'id': parts[0], 'text': " ".join(parts[1:])})
-        print(f"Loaded {len(entries)} entries from {file_path}")
-    except FileNotFoundError:
-        print(f"File {file_path} not found.")
+    if file_path.lower().endswith('.xlsx'):
+        try:
+            df = pd.read_excel(file_path)
+            if 'question' not in df.columns:
+                print("Error: Excel file must contain a 'question' column.")
+                return []
+            
+            # Apply limit if specified
+            if limit is not None:
+                df = df.head(limit)
+                
+            for i, row in df.iterrows():
+                entry = {'id': f"question_{i}", 'text': str(row['question'])}
+                entries.append(entry)
+            print(f"Loaded {len(entries)} entries from {file_path}")
+        except Exception as e:
+            print(f"Error reading Excel file {file_path}: {e}")
+    else:
+        try:
+            with open(file_path, 'r', encoding='utf-8') as file:
+                for i, line in enumerate(file):
+                    if limit is not None and i >= limit:
+                        break
+                    parts = line.strip().split('\t')
+                    if len(parts) > 1:
+                        entries.append({'id': parts[0], 'text': " ".join(parts[1:])})
+            print(f"Loaded {len(entries)} entries from {file_path}")
+        except FileNotFoundError:
+            print(f"File {file_path} not found.")
     return entries
 
 def generate_embeddings(entries, model, batch_size=32):
@@ -57,10 +81,12 @@ def save_embeddings_and_metadata(embeddings, entries, embeddings_file_path, meta
     print(f"Metadata saved to {metadata_file_path}")
 
 def main():
-    parser = argparse.ArgumentParser(description="Create embeddings from an input text file")
-    parser.add_argument("--input_file", type=str, default="wikidata5m_entity.txt",
-                        help="Input file with entries (ID and text separated by tab)")
-    parser.add_argument("--output_dir", type=str, default="wikidata_embedding_entities",
+    parser = argparse.ArgumentParser(description="Create embeddings from an input file")
+    parser.add_argument("--input_file", type=str, 
+                        default="../../datasets/reproduce/test_emed_q_with_paths.xlsx",
+                        help="Input file with entries. For Excel files, expect a 'question' column.")
+    parser.add_argument("--output_dir", type=str, 
+                        default="questions_embedding",
                         help="Output directory for embeddings and metadata")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size for embedding generation")
     args = parser.parse_args()

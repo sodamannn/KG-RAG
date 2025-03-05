@@ -40,6 +40,7 @@ RUN pip3 install --no-cache-dir \
     transformers==4.20.1 \
     datasets==2.7.1 \
     spacy==3.3.3
+    sentence-transformers==2.2.2
 
 RUN pip3 install --no-cache-dir \
     allennlp==2.10.1 \

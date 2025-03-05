@@ -69,8 +69,7 @@ python llm4sm_main.py
 ## Run with the raw data **(Optional)** 
 If you would like to preprocess the raw data (stored in `datasets/original/`) and retrieve the subgraphs from the wikidata, you can run the subgraph retrieval according to the following instructions:
 
-### 
-* Generate the schema matching questions 
+**Prerequisites**: Generate the schema matching questions from original dataset
 
 ```
 python preprocess/generate_question.py
@@ -79,7 +78,7 @@ python preprocess/generate_question.py
 * Retrieve the subgraphs with LLM-based entity retrieval + BFS graph traversal
 
 ```
-python preprocess/llm_based_entity_retrieval.py
+python retrieval/llm_based_entity_retrieval.py
 ```
 * Retrieve the subgraphs with LLM-based entity retrieval + BFS graph traversal. 
 Make sure the entities retrieved by LLMs can be read from the columns with **index 10**. 
@@ -93,35 +92,34 @@ python preprocess/bfs_graph_traversal_wikidata.py
 * Retrieve the subgraphs with LLM-based subgraph retrieval
 
 ```
-python preprocess/llm_based_subgraph_retrieval.py
+python retrieval/llm_based_subgraph_retrieval.py
 ```
-### Vector-based Subgraph Retrieval
+### Vector-based Entity Retrieval + BFS Graph Traversal
 
-KG‐RAG4SM supports multiple retrieval approaches for subgraph extraction from large external knowledge graphs. In the vector‐based subgraph retrieval mode, the system uses a vector database (ChromaDB) to store and manage embeddings (entities, relationships, and KG triples). Then it uses an efficient vector similarity search method (cosine similarity) to identify similar subgraphs. These subgraphs are later refined (e.g., by BFS graph traversal and ranking) to determine the most relevant subgraph(s) to augment a large language model’s input for schema matching.
+In the vector‐based subgraph retrieval mode, the system uses a vector database (ChromaDB) to store and manage embeddings. Then it uses an efficient vector similarity search method (cosine similarity) to identify similar subgraphs. These subgraphs are later refined by vector similarity based ranking to determine the most relevant subgraph(s).
 
-#### Prerequisites
-KG-RAG4SM supports vector-based, graph traversal-based, and query-based graph retrievals, as well as a hybrid approach to identify the most relevant subgraphs from external large knowledge graphs (KGs).
+#### (a) Prerequisites
+KG-RAG4SM supports vector-based, graph traversal-based, as well as a hybrid approach to identify the most relevant subgraphs from external large knowledge graphs (KGs).
 - VectorDB. [Chroma](https://github.com/chroma-core/chroma) is employed to store and manage the embeddings of KG triples and entity, and relations, and implement the efficient vector similarity search. You must have the embeddings for your entities, relationships, or KG triples. 
 - Docker. The Docker container is selected to manage the dependencies for creating embeddings, vector similarity search, and ranking-based subgraph refinement.
 - Other dependencies. PyTorch, Transformers, Pandas, OpenPyXL, etc.
 
-#### Start 
+#### (b) Start 
 
 * Generate and Upload Embeddings:
    - First, you need to generate embeddings from your input schema (for example, from your Excel file containing schema questions) and upload these embeddings into ChromaDB.
    - Run the embedding generation script (e.g., create_embeddings.py) to create your embeddings.
    - Then, use the chromadb_upload.py script (or its updated location, such as under a processes folder) to upload the embeddings to ChromaDB.
 
-* Vector-based Retrieval:
-   Using the embeddings in ChromaDB, the system retrieves candidate subgraphs. There are two retrieval modes:
+<!-- * Vector-based Retrieval:
    - Vector-based Entity Retrieval + BFS Graph Traversal: This approach first uses vector similarity search to identify the top candidate entities and then performs a BFS traversal on the knowledge graph to extract paths between these entities.
-   - Vector-based KG Triples Retrieval: This mode directly retrieves candidate KG triples using vector similarity search on triple embeddings.
+   - Vector-based KG Triples Retrieval: This mode directly retrieves candidate KG triples using vector similarity search on triple embeddings. -->
   
-* Subgraph Refinement Based on Ranking:
+* Subgraph Refinement based on Ranking:
    - Once subgraphs are retrieved, a ranking module (e.g., the path_ranking) scores and selects the top similar subgraphs. This ranking uses the BFS results along with additional similarity data to produce a final, pruned result.
 
 
-#### Running using Docker
+#### (c) Running using Docker
 
 * Build the docker image from the repository root (where your Dockerfile is located):
    ```
@@ -131,7 +129,7 @@ KG-RAG4SM supports vector-based, graph traversal-based, and query-based graph re
    ```
    docker run --gpus all -it -v /path/to/KG-RAG4SM:/app kgrag4sm bash
    ```
-* Generate Embeddings: Read the question from the Excel file (for example, `datasets/test_emed_q.xlsx`) containing your schema-matching questions, and generate embeddings using your custom embedding script. 
+* Generate Embeddings of questions: Read the question from the Excel file (for example, `datasets/test_emed_q.xlsx`) containing your schema-matching questions, and generate embeddings using your custom embedding script. 
    ```
    cd /app/preprocess
    python create_embeddings.py --input_file ../datasets/test_emed_q.xlsx --output_dir questions_embedding
@@ -139,30 +137,76 @@ KG-RAG4SM supports vector-based, graph traversal-based, and query-based graph re
    This command will read the Excel file, generate embeddings using your chosen model (e.g., a SentenceTransformer or a custom model), and save the embeddings (e.g., as `embeddings.npy`) along with metadata (e.g., as `metadata.txt`) into the `questions_embedding` folder.
 
 * Upload Embeddings to ChromaDB: Run the command to upload the created embeddings of entities and (if needed) relationships to VectorDB. 
-   - Upload Entity Embeddings to ChromaDB:
+   - Upload Entity Embeddings and Relationship Embeddings to ChromaDB:
    ```
    python chromadb_upload.py --data_type entities
-   ```
-   - Upload Relationship Embeddings to ChromaDB:
-   
-   ```
    python chromadb_upload.py --data_type relationships
    ```
 * Run the retrieved pipeline for vector similarity-based subgraph retrieval and refinement:
-   - Vector similarity-based Retrieval: This process calculates question embeddings (if not already computed), performs a similarity search against the stored embeddings, and outputs the results (typically to JSON and text files).
+   - Vector similarity-based Entity Retrieval: This process calculates question embeddings (if not already computed), performs a similarity search against the stored embeddings, and outputs the results (typically to JSON and text files).
    ```
-   python vector_similarity_search_main.py similarity_search
+   cd /app/retrieval
+   python vector_based_entity_retrieval_ranking.py similarity_search
    ```
    - BFS graph traversal: Run the BFS-based graph retrieval to retrieve the top candidate entities from your similarity search and calculate the BFS traversal paths between them from your knowledge graph.
    ```
-   python vector_similarity_search_main.py bfs_paths --max_hops 3
+   python vector_based_entity_retrieval_ranking.py bfs_paths --max_hops 3
    ```
   
    - Ranking-based subgraph refinement: Run the path ranking process to score and select the best subgraphs. Make sure the filenames match your outputs (the defaults in the command below assume your BFS paths results are stored in `cms_wikidata_paths_final_full.json` and your question similarity results in `cms_wikidata_similar_full.json`).
    ```
-   python vector_similarity_search_main.py path_ranking --bfs_results cms_wikidata_paths_final_full.json --question_similar_data cms_wikidata_similar_full.json --output_csv pruned_bfs_results.csv --output_json pruned_bfs_results.json
+   python vector_based_entity_retrieval_ranking.py path_ranking --bfs_results cms_wikidata_paths_final_full.json --question_similar_data cms_wikidata_similar_full.json --output_csv pruned_bfs_results.csv --output_json pruned_bfs_results.json
    ```
 This command ranks the retrieved paths based on the scoring algorithm, producing a pruned set of subgraphs in both CSV and JSON formats.
+
+### Vector-based KG Triples Retrieval
+
+KG-RAG4SM provides a powerful triplet-based retrieval approach to extract the most semantically relevant knowledge graph subgraphs. This method directly retrieves knowledge graph triples (head entity, relation, tail entity) that are most similar to the schema matching questions.
+
+#### (a) Prerequisites
+
+* Embeddings. Both schema questions and knowledge graph triplets must be encoded as vector embeddings. The system leverages multiple triplet sources:
+   - Wikidata triplets (triplet2): General knowledge graph facts from Wikidata
+   - Domain-specific triplets (triplet3): Specialized medical knowledge from sources like SNOMED CT and UMLS
+
+* GPU Acceleration. For efficient similarity computation across millions of triplets, CUDA-capable GPUs are recommended.
+* Label Resolution. Access to the Wikidata API for resolving entity and relation IDs to human-readable labels.
+
+#### (b) Start 
+
+* Embedding Preparation:
+   - Load question embeddings from Parquet or NumPy files.
+   <!-- - Load triplet embeddings from different knowledge sources(e.g., "<Disease, has symptom, Fever>"). -->
+   - Normalize all embeddings to enable cosine similarity calculation.
+
+* Vector Similarity-based Retrieval and Ranking:
+   - For each schema question, compute similarity scores with all available triplet embeddings.
+   - Track top-K most similar triplets from each source.
+  
+<!-- * Ranking: Output the top-K most relevant triplets for each schema question.
+  We have used wikidata triplets as triplet 2 and triplet embeddings from a medical dataset as triplet embeddings 3.
+   - Combine results from different triplet sources(top 7 from triplet 2 and top 3 from triplet 3).
+   - Output the top-K most relevant triplets for each schema question. -->
+ 
+
+#### (c) Run using Docker
+* Build and run Docker
+```
+docker build -t kgrag4sm .
+docker run --gpus all -it -v $(pwd):/app kgrag4sm bash
+```
+
+* Generate question embeddings:
+```
+cd /app/preprocess 
+python create_embeddings.py --input_file ../datasets/test_emed_q.xlsx --output_dir questions_embedding
+```
+
+* Run vector-based KG triplet retrieval and ranking-based refinement:
+```
+cd /app/retrieval
+python vector_based_KG_triple_retrieval_ranking.py triplet_ranking --dataset emed
+```
 
 ## Citation
 If you find our work helpful, please cite by using the following BibTeX entry:
