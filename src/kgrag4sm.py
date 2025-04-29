@@ -35,6 +35,7 @@ class KGRAG_for_Schema_Matching:
                 """
 
     def generate_user_prompt(self, question: str, paths: Optional[str]) -> str:
+        #f""" """ 是一种用于构造多行格式化字符串的方式,f-string
         prompt = f"""Based on the provided example and the following knowledge graph context, please answer the following schema matching question:
         
         {question}
@@ -46,9 +47,11 @@ class KGRAG_for_Schema_Matching:
         Do not mention that there is not enough information to decide.
         """
         return prompt
-    
+    #system_prompt :prompt offered by system, describe task or enviroment
+    #user_prompt : prompt offered by user,describe actual question或要求模型生成响应的内容。
     def get_llm_response(self, system_prompt: str, user_prompt: str, model: Union[str, pipeline]) -> str:
         if isinstance(model, str) and model.startswith('gpt'):
+            #build OpenAI client,this client is used to send request and receive response
             client = openai.Client()
             messages = [
                 {"role": "system", "content": system_prompt},
@@ -65,7 +68,10 @@ class KGRAG_for_Schema_Matching:
                 {"role": "user", "content": user_prompt},
             ]
             terminators = [
+                #eos_token_id：This is tokenizer's end-of-sequence ID。
+                #在生成任务中，模型会生成一个 token，当生成的 token 与 eos_token_id 匹配时，表示文本已经完成。
                 model.tokenizer.eos_token_id,
+                #自定义的结束符 ID，它通过将自定义 token "<|eot_id|>" 转换为 ID 来实现。
                 model.tokenizer.convert_tokens_to_ids("<|eot_id|>")
             ]
             
