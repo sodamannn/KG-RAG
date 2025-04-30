@@ -63,6 +63,12 @@ class KGRAG_for_Schema_Matching:
             )
             return response.choices[0].message.content
         else:
+            # 仅修改这一行：添加jellyfish-7b的特殊提示格式
+            if hasattr(model, 'model') and "jellyfish-7b" in str(model.model.config._name_or_path).lower():
+                input_text = f"### System:\n{system_prompt}\n### User:\n{user_prompt}\n### Assistant:\n"
+                response = model(input_text, max_new_tokens=4096)
+                return response[0]['generated_text'].split("### Assistant:")[-1].strip()
+            
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
